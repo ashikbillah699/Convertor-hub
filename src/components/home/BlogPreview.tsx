@@ -1,14 +1,16 @@
 import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, Calendar, Clock } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { blogPosts as allBlogPosts } from "@/data/blogPosts";
-
-const blogPosts = allBlogPosts.slice(0, 3).map((p) => ({
-  ...p,
-  href: `/blog/${p.id}`,
-}));
+import { getPublicBlogs } from "@/lib/contentApi";
 
 const BlogPreview = () => {
+  const { data: allBlogPosts = [], isLoading, error } = useQuery({
+    queryKey: ["public-blogs"],
+    queryFn: getPublicBlogs,
+  });
+  const blogPosts = allBlogPosts.slice(0, 3);
+
   return (
     <section className="py-20 md:py-28">
       <div className="container">
@@ -31,11 +33,13 @@ const BlogPreview = () => {
         </div>
 
         {/* Blog Grid */}
+        {isLoading && <p className="text-center text-muted-foreground">Loading articles…</p>}
+        {error && <p role="alert" className="text-center text-destructive">{error.message}</p>}
         <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
           {blogPosts.map((post, index) => (
             <Link
               key={post.id}
-              to={post.href}
+              to={`/blog/${post.id}`}
               className="group tool-card p-0 overflow-hidden animate-fade-in"
               style={{ animationDelay: `${index * 0.1}s` }}
             >

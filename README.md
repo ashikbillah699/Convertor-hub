@@ -1,73 +1,46 @@
-# Welcome to your Lovable project
+# OpticThirst
 
-## Project info
+OpticThirst is a Vite/React application with a local Express + MongoDB content API for blogs and affiliate products.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Local development
 
-## How can I edit this code?
+The API binds to `127.0.0.1`, and Vite proxies `/api` to it. There is no deployment requirement for local development.
 
-There are several ways of editing your application.
+1. Install Node.js and MongoDB Community Server, then start the local MongoDB service.
+2. From the project directory, install packages and create your local environment file:
 
-**Use Lovable**
+   ```powershell
+   npm install
+   Copy-Item .env.example .env
+   ```
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+3. Generate an admin password hash in a terminal. The password is entered without being echoed:
 
-Changes made via Lovable will be committed automatically to this repo.
+   ```powershell
+   npm run admin:hash
+   ```
 
-**Use your preferred IDE**
+   Put the printed `ADMIN_PASSWORD_HASH` value in `.env` and set `ADMIN_USERNAME`. Generate a session secret:
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+   ```powershell
+   node -e "console.log(require('node:crypto').randomBytes(48).toString('hex'))"
+   ```
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+   Put the resulting value in `.env` as `SESSION_SECRET`. Keep `MONGODB_URI`, `ADMIN_PASSWORD_HASH`, and `SESSION_SECRET` server-side; never add a `VITE_` prefix or commit `.env`.
 
-Follow these steps:
+4. Seed the existing six full blog posts and twelve products, then start the API:
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+   ```powershell
+   npm run db:seed
+   npm run server:dev
+   ```
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+   Start the frontend in a second terminal:
 
-# Step 3: Install the necessary dependencies.
-npm i
+   ```powershell
+   npm run dev
+   ```
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
+   Open `http://localhost:8080`; the admin panel is at `/admin`. Check API/database status at `http://localhost:8080/api/health`.
 
-**Edit a file directly in GitHub**
-
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
-
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+The seed is idempotent: it inserts missing records and never overwrites existing edits. The admin panel supports creating, editing, publishing/unpublishing, and deleting blogs and products. The JSON editor is validated by the API. Existing blog IDs, product slugs, and tool-category associations are preserved. Public endpoints return published content only.

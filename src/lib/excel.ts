@@ -173,10 +173,8 @@ export const pdfTextToRows = (text: string) => {
     .map(line => line.trim())
     .filter(Boolean);
 
-  const rows: string[][] = [];
-  for (const chunk of chunks) {
-    rows.push(asTableRows(chunk).length ? asTableRows(chunk) : [[chunk]]);
-  }
-
-  return rows.flat();
+  return chunks.flatMap(chunk => {
+    const tableRows = asTableRows(chunk);
+    return tableRows.length ? tableRows : [[chunk]];
+  });
 };

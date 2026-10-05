@@ -1,14 +1,13 @@
 import { useState, useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { Search, Star, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { products, ALL_COUNTRIES, availableCountries, filterByCountry } from "@/data/products";
+import { ALL_COUNTRIES } from "@/data/contentTypes";
+import { getPublicProducts } from "@/lib/contentApi";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-
-const categories = ["All", ...Array.from(new Set(products.map(p => p.category)))];
-const countryOptions = [ALL_COUNTRIES, ...availableCountries()];
 
 const ProductsPage = () => {
   const [searchParams] = useSearchParams();
@@ -16,6 +15,12 @@ const ProductsPage = () => {
   const [selectedCategory, setSelectedCategory] = useState("All");
   const [selectedCountry, setSelectedCountry] = useState(ALL_COUNTRIES);
   const toolCategory = searchParams.get("toolCategory");
+  const { data: products = [], isLoading, error, refetch } = useQuery({
+    queryKey: ["public-products"],
+    queryFn: getPublicProducts,
+  });
+  const categories = ["All", ...Array.from(new Set(products.map((product) => product.category)))];
+  const countryOptions = [ALL_COUNTRIES, ...Array.from(new Set(products.flatMap((product) => product.countries))).sort()];
 
   useEffect(() => {
     // When arriving with a toolCategory filter, reset product category filter to "All"
@@ -23,12 +28,13 @@ const ProductsPage = () => {
     if (toolCategory) setSelectedCategory("All");
   }, [toolCategory]);
 
-  const filteredProducts = filterByCountry(products, selectedCountry).filter((product) => {
+  const filteredProducts = products.filter((product) => {
     const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       product.description.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesCategory = selectedCategory === "All" || product.category === selectedCategory;
     const matchesToolCategory = !toolCategory || (product.relatedToolCategories || []).includes(toolCategory);
-    return matchesSearch && matchesCategory && matchesToolCategory;
+    const matchesCountry = selectedCountry === ALL_COUNTRIES || product.countries.includes(selectedCountry);
+    return matchesSearch && matchesCategory && matchesToolCategory && matchesCountry;
   });
 
   return (
@@ -96,6 +102,13 @@ const ProductsPage = () => {
           </div>
 
           {/* Products Grid */}
+          {isLoading && <p className="py-12 text-center text-muted-foreground">Loading products…</p>}
+          {error && (
+            <div role="alert" className="py-12 text-center">
+              <p className="mb-3 text-destructive">{error.message}</p>
+              <button className="text-primary underline" onClick={() => void refetch()}>Try again</button>
+            </div>
+          )}
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filteredProducts.map((product, index) => (
               <Link

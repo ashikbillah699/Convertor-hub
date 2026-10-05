@@ -4,14 +4,14 @@ const escapeHtml = (value: string) => value
   .replace(/&/g, "&amp;")
   .replace(/</g, "&lt;")
   .replace(/>/g, "&gt;")
-  .replace(/\"/g, "&quot;")
+  .replace(/"/g, "&quot;")
   .replace(/'/g, "&#039;");
 
 const escapeXml = (value: string) => value
   .replace(/&/g, "&amp;")
   .replace(/</g, "&lt;")
   .replace(/>/g, "&gt;")
-  .replace(/\"/g, "&quot;")
+  .replace(/"/g, "&quot;")
   .replace(/'/g, "&apos;");
 
 export const isValidPptxFile = (file: Pick<File, "name" | "type">) => {
@@ -40,12 +40,11 @@ export const extractPptxSlideText = async (arrayBuffer: ArrayBuffer): Promise<st
       if (!content) return "";
 
       const doc = new DOMParser().parseFromString(content, "application/xml");
+      const parserError = doc.getElementsByTagName("parsererror")[0];
+      if (parserError) throw new Error(`Slide ${path} contains invalid XML: ${parserError.textContent}`);
+
       const textNodes = Array.from(doc.getElementsByTagName("*"))
-        .filter(node => {
-          const tagName = (node as Element).tagName || "";
-          const localName = (node as Element).localName || "";
-          return tagName.toLowerCase().endsWith(":t") || localName.toLowerCase() === "t";
-        })
+        .filter(node => (node as Element).localName?.toLowerCase() === "t")
         .map(node => node.textContent ?? "")
         .filter(Boolean);
 
@@ -54,8 +53,9 @@ export const extractPptxSlideText = async (arrayBuffer: ArrayBuffer): Promise<st
     }));
 
     return result.filter(slideText => slideText.trim().length > 0);
-  } catch {
-    throw new Error("This file is not a valid .pptx file. Legacy .ppt files are not supported here. Please convert it to .pptx first.");
+  } catch (error) {
+    const reason = error instanceof Error ? ` ${error.message}` : "";
+    throw new Error(`This file is not a valid .pptx file. Legacy .ppt files are not supported here. Please convert it to .pptx first.${reason}`);
   }
 };
 

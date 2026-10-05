@@ -1,14 +1,34 @@
 import { useParams, Navigate, Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, Star, ExternalLink, Check, X, ShieldCheck } from "lucide-react";
-import { getProductBySlug, products } from "@/data/products";
+import { getPublicProduct, getPublicProducts } from "@/lib/contentApi";
 
 const ProductDetailPage = () => {
   const { productSlug } = useParams();
-  const product = getProductBySlug(productSlug!);
+  const { data: product, isLoading, error, refetch } = useQuery({
+    queryKey: ["public-product", productSlug],
+    queryFn: () => getPublicProduct(productSlug!),
+    enabled: Boolean(productSlug),
+  });
+  const { data: products = [] } = useQuery({
+    queryKey: ["public-products"],
+    queryFn: getPublicProducts,
+  });
 
+  if (isLoading) return <div className="grid min-h-screen place-items-center text-muted-foreground">Loading product…</div>;
+  if (error) {
+    return (
+      <div className="grid min-h-screen place-items-center px-4 text-center">
+        <div role="alert">
+          <p className="mb-3 text-destructive">{error.message}</p>
+          <button className="text-primary underline" onClick={() => void refetch()}>Try again</button>
+        </div>
+      </div>
+    );
+  }
   if (!product) return <Navigate to="/products" replace />;
 
   // Get related products (same category, exclude current)

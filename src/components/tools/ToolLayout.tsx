@@ -3,8 +3,9 @@ import Footer from "@/components/layout/Footer";
 import { Link } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { ReactNode } from "react";
+import { useQuery } from "@tanstack/react-query";
 import RelatedProducts from "@/components/tools/RelatedProducts";
-import { getProductsByToolCategory } from "@/data/products";
+import { getPublicProducts } from "@/lib/contentApi";
 
 interface Props {
   title: string;
@@ -15,7 +16,13 @@ interface Props {
 }
 
 const ToolLayout = ({ title, description, icon, children, toolCategory }: Props) => {
-  const relatedProducts = toolCategory ? getProductsByToolCategory(toolCategory) : [];
+  const { data: products = [], error } = useQuery({
+    queryKey: ["public-products"],
+    queryFn: getPublicProducts,
+  });
+  const relatedProducts = toolCategory
+    ? products.filter((product) => product.relatedToolCategories.includes(toolCategory))
+    : [];
 
   return (
     <div className="min-h-screen bg-background">
@@ -33,6 +40,7 @@ const ToolLayout = ({ title, description, icon, children, toolCategory }: Props)
           {children}
         </div>
         <div className="container">
+          {error && <p role="alert" className="text-center text-sm text-destructive">{error.message}</p>}
           <RelatedProducts products={relatedProducts} />
         </div>
       </main>

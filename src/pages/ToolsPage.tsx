@@ -66,11 +66,12 @@ const allTools = [
   // General Tools (5)
   { id: "qr-code-generator", name: "QR Code Generator", category: "General", icon: Wrench, color: "text", description: "Generate QR codes from text/URLs", rating: 4.9, href: "/tools/general/qr-code-generator" },
   { id: "file-renamer", name: "File Renamer", category: "General", icon: Wrench, color: "text", description: "Rename files before downloading", rating: 4.5, href: "/tools/general/file-renamer" },
-  { id: "zip-to-rar", name: "ZIP to RAR", category: "General", icon: Wrench, color: "text", description: "Convert ZIP to RAR format", rating: 4.4, href: "/tools/general/zip-to-rar" },
+  { id: "zip-to-7z", name: "ZIP to 7z", category: "General", icon: Wrench, color: "text", description: "Convert ZIP archives to 7z format in your browser", rating: 4.5, href: "/tools/general/zip-to-7z" },
   { id: "rar-to-zip", name: "RAR to ZIP", category: "General", icon: Wrench, color: "text", description: "Convert RAR to ZIP format", rating: 4.4, href: "/tools/general/rar-to-zip" },
   { id: "file-compressor", name: "File Compressor", category: "General", icon: Wrench, color: "text", description: "Compress files to reduce size", rating: 4.5, href: "/tools/general/file-compressor" },
 
-  // Calculators (10)
+  // Calculators (11)
+  { id: "basic-calc", name: "Basic Calculator", category: "Calculator", icon: Calculator, color: "text", description: "Add, subtract, multiply and divide", rating: 4.8, href: "/tools/calculator/basic" },
   { id: "gpa-calc", name: "GPA Calculator", category: "Calculator", icon: Calculator, color: "text", description: "Calculate Grade Point Average", rating: 4.8, href: "/tools/calculator/gpa" },
   { id: "age-calc", name: "Age Calculator", category: "Calculator", icon: Calculator, color: "text", description: "Calculate exact age from DOB", rating: 4.9, href: "/tools/calculator/age" },
   { id: "emi-calc", name: "EMI Calculator", category: "Calculator", icon: Calculator, color: "text", description: "Calculate monthly installments", rating: 4.7, href: "/tools/calculator/emi" },

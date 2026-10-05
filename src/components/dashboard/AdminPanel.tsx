@@ -25,6 +25,9 @@ interface UserData {
   storageUsed: string;
 }
 
+const isUserRole = (value: string): value is UserData["role"] =>
+  value === "User" || value === "Admin" || value === "Developer";
+
 interface DevActivity {
   id: number;
   developer: string;
@@ -212,7 +215,7 @@ const AdminPanel = () => {
                     <div className="flex items-center justify-between">
                       <Badge variant="outline" className="text-xs">{u.role}</Badge>
                       <div className="flex gap-1">
-                        <Select value={u.role} onValueChange={(val) => changeRole(u.id, val as any)}>
+                        <Select value={u.role} onValueChange={val => { if (isUserRole(val)) changeRole(u.id, val); }}>
                           <SelectTrigger className="h-7 text-xs w-24"><SelectValue /></SelectTrigger>
                           <SelectContent>
                             <SelectItem value="User">User</SelectItem>
@@ -257,7 +260,7 @@ const AdminPanel = () => {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Select value={u.role} onValueChange={(val) => changeRole(u.id, val as any)}>
+                          <Select value={u.role} onValueChange={val => { if (isUserRole(val)) changeRole(u.id, val); }}>
                             <SelectTrigger className="h-8 text-xs w-[110px]"><SelectValue /></SelectTrigger>
                             <SelectContent>
                               <SelectItem value="User">User</SelectItem>

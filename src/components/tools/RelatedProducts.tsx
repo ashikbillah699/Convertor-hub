@@ -1,24 +1,25 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Star, ExternalLink, Search } from "lucide-react";
-import { Product, ALL_COUNTRIES, availableCountries, filterByCountry } from "@/data/products";
+import type { Product } from "@/data/products";
+import { ALL_COUNTRIES } from "@/data/contentTypes";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface Props {
   products: Product[];
 }
 
-const countryOptions = [ALL_COUNTRIES, ...availableCountries()];
-
 const RelatedProducts = ({ products }: Props) => {
   const [query, setQuery] = useState("");
   const [country, setCountry] = useState(ALL_COUNTRIES);
+  const countryOptions = [ALL_COUNTRIES, ...Array.from(new Set(products.flatMap((product) => product.countries))).sort()];
 
   if (products.length === 0) return null;
 
-  const visible = filterByCountry(products, country).filter((p) =>
-    p.name.toLowerCase().includes(query.toLowerCase()) ||
-    p.description.toLowerCase().includes(query.toLowerCase())
+  const visible = products.filter((product) =>
+    (country === ALL_COUNTRIES || product.countries.includes(country)) &&
+    (product.name.toLowerCase().includes(query.toLowerCase()) ||
+    product.description.toLowerCase().includes(query.toLowerCase()))
   );
 
   return (

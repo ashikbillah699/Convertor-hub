@@ -2,7 +2,7 @@ import { useState, useMemo, useRef } from "react";
 import { useParams, Navigate } from "react-router-dom";
 import ToolLayout from "@/components/tools/ToolLayout";
 import { Button } from "@/components/ui/button";
-import { Type, Copy, Check, Trash2, Play, Volume2 } from "lucide-react";
+import { Type, Copy, Check, Trash2, Play, Volume2, Code, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { marked } from "marked";
 
@@ -80,10 +80,13 @@ const TextTools = () => {
   const { toolId } = useParams();
   const [input, setInput] = useState("");
   const [output, setOutput] = useState("");
+  const [markdownView, setMarkdownView] = useState<"html" | "preview">("html");
   const [copied, setCopied] = useState(false);
   const [speaking, setSpeaking] = useState(false);
   const [listening, setListening] = useState(false);
-  const recognitionRef = useRef<{ start: () => void; stop: () => void; onresult: ((event: { resultIndex: number; results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal: boolean }> }) => void) | null; onerror: (() => void) | null; onend: (() => void) | null } | null>(null);
+  const recognitionRef = useRef<{ start: () => void; stop: () => void; continuous: boolean; interimResults: boolean; onresult: ((event: { resultIndex: number; results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal: boolean }> }) => void) | null; onerror: ((event: { error: string }) => void) | null; onend: (() => void) | null } | null>(null);
+  const listeningRef = useRef(false);
+  const transcriptBeforeListeningRef = useRef("");
 
   const tool = tools[toolId!];
 
@@ -129,7 +132,9 @@ const TextTools = () => {
 
   const handleListen = () => {
     if (listening) {
+      listeningRef.current = false;
       recognitionRef.current?.stop();
+      setListening(false);
       return;
     }
     const speechWindow = window as typeof window & {
@@ -142,20 +147,39 @@ const TextTools = () => {
       return;
     }
     const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
     recognitionRef.current = recognition;
+    transcriptBeforeListeningRef.current = input.trim();
     recognition.onresult = event => {
-      const transcript = Array.from(event.results).slice(event.resultIndex).map(result => result[0].transcript).join("");
-      if (transcript) setInput(current => `${current}${current && !current.endsWith(" ") ? " " : ""}${transcript}`);
+      const transcript = Array.from(event.results).map(result => result[0].transcript).join(" ").trim();
+      const prefix = transcriptBeforeListeningRef.current;
+      setInput(transcript ? `${prefix}${prefix ? " " : ""}${transcript}` : prefix);
     };
-    recognition.onerror = () => {
+    recognition.onerror = event => {
+      if (event.error === "no-speech" || event.error === "aborted") return;
+      listeningRef.current = false;
       setListening(false);
       toast.error("Microphone transcription failed. Check browser microphone permission.");
     };
-    recognition.onend = () => setListening(false);
+    recognition.onend = () => {
+      if (listeningRef.current) {
+        try {
+          recognition.start();
+          return;
+        } catch {
+          listeningRef.current = false;
+        }
+      }
+      setListening(false);
+    };
     try {
-      recognition.start();
+      listeningRef.current = true;
       setListening(true);
+      recognition.start();
     } catch {
+      listeningRef.current = false;
+      setListening(false);
       toast.error("Could not start speech recognition.");
     }
   };
@@ -284,14 +308,26 @@ const TextTools = () => {
               className="w-full h-48 p-4 bg-transparent border-0 resize-none focus:outline-none text-foreground placeholder:text-muted-foreground font-mono text-sm" />
           </div>
           <div className="tool-card">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-semibold">Output</h3>
-              {output && <Button size="sm" variant="ghost" onClick={() => handleCopy(output)}>
-                {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-              </Button>}
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+              <h3 className="font-semibold">{toolId === "markdown-to-html" ? "HTML Output" : "Output"}</h3>
+              <div className="flex items-center gap-1">
+                {toolId === "markdown-to-html" && output && (
+                  <>
+                    <Button size="sm" variant={markdownView === "html" ? "secondary" : "ghost"} onClick={() => setMarkdownView("html")}>
+                      <Code className="h-4 w-4" /> HTML
+                    </Button>
+                    <Button size="sm" variant={markdownView === "preview" ? "secondary" : "ghost"} onClick={() => setMarkdownView("preview")}>
+                      <Eye className="h-4 w-4" /> Preview
+                    </Button>
+                  </>
+                )}
+                {output && <Button size="sm" variant="ghost" onClick={() => handleCopy(output)} aria-label="Copy output">
+                  {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                </Button>}
+              </div>
             </div>
-            {toolId === "markdown-to-html" && output ? (
-              <div className="prose prose-sm dark:prose-invert max-h-48 overflow-auto" dangerouslySetInnerHTML={{ __html: output }} />
+            {toolId === "markdown-to-html" && output && markdownView === "preview" ? (
+              <iframe title="Rendered Markdown preview" sandbox="" srcDoc={output} className="h-48 w-full rounded-md bg-background" />
             ) : (
               <textarea value={output} readOnly placeholder="Output will appear here..."
                 className="w-full h-48 p-4 bg-transparent border-0 resize-none focus:outline-none text-foreground placeholder:text-muted-foreground font-mono text-sm" />

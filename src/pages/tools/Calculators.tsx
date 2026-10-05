@@ -1,334 +1,454 @@
 import { useState } from "react";
-import { useParams, Navigate } from "react-router-dom";
-import ToolLayout from "@/components/tools/ToolLayout";
+import { Navigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import ToolLayout from "@/components/tools/ToolLayout";
+import ToolSeo from "@/components/seo/ToolSeo";
 import { Calculator } from "lucide-react";
-import { toast } from "sonner";
+import {
+  calculateAge,
+  calculateBasic,
+  calculateBmi,
+  calculateDiscount,
+  calculateGpa,
+  calculateLoan,
+  calculatePercentage,
+  calculateTax,
+  calculateTip,
+  convertUnit,
+  units,
+  type CourseGrade,
+  type BasicOperator,
+  type UnitCategory,
+} from "@/lib/calculatorMath";
+import calculatorPages from "@/pages/tools/calculatorSeo";
 
-const toolMeta: Record<string, { title: string; desc: string }> = {
-  "gpa": { title: "GPA Calculator", desc: "Calculate your Grade Point Average" },
-  "age": { title: "Age Calculator", desc: "Calculate your exact age from date of birth" },
-  "emi": { title: "EMI Calculator", desc: "Calculate Equated Monthly Installment" },
-  "vat-tax": { title: "VAT/Tax Calculator", desc: "Calculate VAT or tax on any amount" },
-  "bmi": { title: "BMI Calculator", desc: "Calculate your Body Mass Index" },
-  "percentage": { title: "Percentage Calculator", desc: "Calculate percentages easily" },
-  "discount": { title: "Discount Calculator", desc: "Calculate discount and final price" },
-  "loan": { title: "Loan Calculator", desc: "Calculate loan payments and interest" },
-  "tip": { title: "Tip Calculator", desc: "Calculate tip amount and split bills" },
-  "unit-converter": { title: "Unit Converter", desc: "Convert between different units of measurement" },
+interface CalculatorInputProps {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  type?: "number" | "date";
+  min?: number | string;
+  max?: number | string;
+  step?: number | string;
+}
+
+const CalculatorInput = ({ label, value, onChange, type = "number", ...attributes }: CalculatorInputProps) => {
+  const id = label.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+  return (
+    <div>
+      <label htmlFor={id} className="mb-1 block text-sm font-medium">{label}</label>
+      <input
+        id={id}
+        type={type}
+        value={value}
+        onChange={event => onChange(event.target.value)}
+        className="w-full rounded-lg border border-border bg-background px-4 py-3 focus:border-primary focus:outline-none"
+        {...attributes}
+      />
+    </div>
+  );
 };
 
-const Input = ({ label, value, onChange, type = "number", ...props }: { label: string; value: string | number; onChange: (v: string) => void; type?: string; [k: string]: unknown }) => (
-  <div>
-    <label className="text-sm font-medium mb-1 block">{label}</label>
-    <input type={type} value={value} onChange={e => onChange(e.target.value)}
-      className="w-full px-4 py-3 rounded-lg border border-border bg-background focus:border-primary focus:outline-none"
-      {...props} />
-  </div>
-);
-
-const Result = ({ items }: { items: { label: string; value: string | number }[] }) => (
-  <div className="grid grid-cols-2 gap-4 mt-6">
-    {items.map(i => (
-      <div key={i.label} className="tool-card text-center">
-        <p className="text-2xl font-bold text-primary">{i.value}</p>
-        <p className="text-xs text-muted-foreground">{i.label}</p>
+const CalculatorResults = ({ items }: { items: { label: string; value: string | number }[] }) => (
+  <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2" aria-live="polite">
+    {items.map(item => (
+      <div key={item.label} className="tool-card text-center">
+        <p className="break-words text-2xl font-bold text-primary">{item.value}</p>
+        <p className="text-xs text-muted-foreground">{item.label}</p>
       </div>
     ))}
   </div>
 );
 
-// GPA Calculator
-const GpaCalc = () => {
-  const [courses, setCourses] = useState([{ grade: "4.0", credits: "3" }]);
-  const addCourse = () => setCourses([...courses, { grade: "4.0", credits: "3" }]);
-  const update = (i: number, field: string, val: string) => {
-    const c = [...courses]; c[i] = { ...c[i], [field]: val }; setCourses(c);
-  };
-  const gpa = courses.reduce((sum, c) => sum + parseFloat(c.grade || "0") * parseFloat(c.credits || "0"), 0) /
-    (courses.reduce((sum, c) => sum + parseFloat(c.credits || "0"), 0) || 1);
+const InvalidInput = ({ children = "Check the values entered above." }: { children?: string }) => (
+  <p role="alert" className="mt-4 text-sm text-destructive">{children}</p>
+);
+
+const todayForDateInput = () => {
+  const today = new Date();
+  const offset = today.getTimezoneOffset();
+  return new Date(today.getTime() - offset * 60_000).toISOString().slice(0, 10);
+};
+
+const BasicCalculator = () => {
+  const [first, setFirst] = useState("12");
+  const [operator, setOperator] = useState<BasicOperator>("+");
+  const [second, setSecond] = useState("8");
+  const result = calculateBasic(first, operator, second);
+
   return (
     <div className="space-y-4">
-      {courses.map((c, i) => (
-        <div key={i} className="grid grid-cols-2 gap-4">
-          <Input label={`Course ${i + 1} Grade`} value={c.grade} onChange={v => update(i, "grade", v)} step="0.1" min="0" max="4" />
-          <Input label="Credits" value={c.credits} onChange={v => update(i, "credits", v)} min="1" />
+      <CalculatorInput label="First Number" value={first} onChange={setFirst} step="any" />
+      <div>
+        <label htmlFor="basic-operator" className="mb-1 block text-sm font-medium">Operation</label>
+        <select
+          id="basic-operator"
+          value={operator}
+          onChange={event => setOperator(event.target.value as BasicOperator)}
+          className="w-full rounded-lg border border-border bg-background px-4 py-3"
+        >
+          <option value="+">Addition (+)</option>
+          <option value="-">Subtraction (−)</option>
+          <option value="×">Multiplication (×)</option>
+          <option value="÷">Division (÷)</option>
+        </select>
+      </div>
+      <CalculatorInput label="Second Number" value={second} onChange={setSecond} step="any" />
+      {result !== null ? (
+        <CalculatorResults items={[{ label: "Result", value: Number(result.toPrecision(12)).toLocaleString() }]} />
+      ) : <InvalidInput>Enter valid numbers. The divisor cannot be zero.</InvalidInput>}
+    </div>
+  );
+};
+
+const GpaCalculator = () => {
+  const [courses, setCourses] = useState<CourseGrade[]>([{ grade: "4.0", credits: "3" }]);
+  const result = calculateGpa(courses);
+
+  const updateCourse = (index: number, field: keyof CourseGrade, value: string) => {
+    setCourses(current => current.map((course, courseIndex) =>
+      courseIndex === index ? { ...course, [field]: value } : course,
+    ));
+  };
+
+  return (
+    <div className="space-y-4">
+      {courses.map((course, index) => (
+        <div key={index} className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_1fr_auto]">
+          <CalculatorInput
+            label={`Course ${index + 1} Grade (0–4)`}
+            value={course.grade}
+            onChange={value => updateCourse(index, "grade", value)}
+            min="0"
+            max="4"
+            step="0.01"
+          />
+          <CalculatorInput
+            label={`Course ${index + 1} Credits`}
+            value={course.credits}
+            onChange={value => updateCourse(index, "credits", value)}
+            min="0.01"
+            step="0.5"
+          />
+          {courses.length > 1 && (
+            <Button
+              type="button"
+              variant="outline"
+              className="self-end"
+              onClick={() => setCourses(current => current.filter((_, courseIndex) => courseIndex !== index))}
+              aria-label={`Remove course ${index + 1}`}
+            >
+              Remove
+            </Button>
+          )}
         </div>
       ))}
-      <Button variant="outline" onClick={addCourse}>+ Add Course</Button>
-      <Result items={[
-        { label: "GPA", value: gpa.toFixed(2) },
-        { label: "Total Credits", value: courses.reduce((s, c) => s + parseFloat(c.credits || "0"), 0) },
-      ]} />
+      <Button
+        type="button"
+        variant="outline"
+        onClick={() => setCourses(current => [...current, { grade: "4.0", credits: "3" }])}
+      >
+        + Add Course
+      </Button>
+      {result ? (
+        <CalculatorResults items={[
+          { label: "Weighted GPA (4.0 scale)", value: result.gpa.toFixed(2) },
+          { label: "Total Credits", value: result.totalCredits.toLocaleString() },
+        ]} />
+      ) : <InvalidInput>Enter a grade from 0 to 4 and a positive credit value for every course.</InvalidInput>}
     </div>
   );
 };
 
-// Age Calculator
-const AgeCalc = () => {
-  const [dob, setDob] = useState("");
-  const calc = () => {
-    if (!dob) return null;
-    const birth = new Date(dob);
-    const now = new Date();
-    let years = now.getFullYear() - birth.getFullYear();
-    let months = now.getMonth() - birth.getMonth();
-    let days = now.getDate() - birth.getDate();
-    if (days < 0) { months--; days += new Date(now.getFullYear(), now.getMonth(), 0).getDate(); }
-    if (months < 0) { years--; months += 12; }
-    return { years, months, days, totalDays: Math.floor((now.getTime() - birth.getTime()) / 86400000) };
-  };
-  const age = calc();
+const AgeCalculator = () => {
+  const [dateOfBirth, setDateOfBirth] = useState("");
+  const result = dateOfBirth ? calculateAge(dateOfBirth) : null;
+
   return (
     <div className="space-y-4">
-      <Input label="Date of Birth" value={dob} onChange={setDob} type="date" />
-      {age && <Result items={[
-        { label: "Years", value: age.years },
-        { label: "Months", value: age.months },
-        { label: "Days", value: age.days },
-        { label: "Total Days", value: age.totalDays.toLocaleString() },
-      ]} />}
+      <CalculatorInput
+        label="Date of Birth"
+        value={dateOfBirth}
+        onChange={setDateOfBirth}
+        type="date"
+        max={todayForDateInput()}
+      />
+      {result ? (
+        <CalculatorResults items={[
+          { label: "Years", value: result.years },
+          { label: "Months", value: result.months },
+          { label: "Days", value: result.days },
+          { label: "Total Days", value: result.totalDays.toLocaleString() },
+        ]} />
+      ) : dateOfBirth
+        ? <InvalidInput>Enter a valid date of birth that is today or earlier.</InvalidInput>
+        : <p className="text-sm text-muted-foreground">Choose your date of birth to calculate your age.</p>}
     </div>
   );
 };
 
-// EMI Calculator
-const EmiCalc = () => {
-  const [p, setP] = useState("100000");
-  const [r, setR] = useState("10");
-  const [n, setN] = useState("12");
-  const principal = parseFloat(p) || 0;
-  const rate = (parseFloat(r) || 0) / 12 / 100;
-  const tenure = parseFloat(n) || 1;
-  const emi = rate > 0 ? principal * rate * Math.pow(1 + rate, tenure) / (Math.pow(1 + rate, tenure) - 1) : principal / tenure;
-  const totalPayment = emi * tenure;
+const EmiCalculator = () => {
+  const [principal, setPrincipal] = useState("100000");
+  const [annualRate, setAnnualRate] = useState("10");
+  const [months, setMonths] = useState("12");
+  const result = calculateLoan(principal, annualRate, months);
+
   return (
     <div className="space-y-4">
-      <Input label="Loan Amount" value={p} onChange={setP} />
-      <Input label="Interest Rate (% per year)" value={r} onChange={setR} step="0.1" />
-      <Input label="Tenure (months)" value={n} onChange={setN} />
-      <Result items={[
-        { label: "Monthly EMI", value: `৳${emi.toFixed(0)}` },
-        { label: "Total Payment", value: `৳${totalPayment.toFixed(0)}` },
-        { label: "Total Interest", value: `৳${(totalPayment - principal).toFixed(0)}` },
-      ]} />
+      <CalculatorInput label="Loan Amount (৳)" value={principal} onChange={setPrincipal} min="0.01" step="any" />
+      <CalculatorInput label="Interest Rate (% per year)" value={annualRate} onChange={setAnnualRate} min="0" step="0.01" />
+      <CalculatorInput label="Tenure (months)" value={months} onChange={setMonths} min="1" step="1" />
+      {result ? (
+        <CalculatorResults items={[
+          { label: "Monthly EMI", value: `৳${result.monthlyPayment.toFixed(2)}` },
+          { label: "Total Payment", value: `৳${result.totalPayment.toFixed(2)}` },
+          { label: "Total Interest", value: `৳${result.totalInterest.toFixed(2)}` },
+        ]} />
+      ) : <InvalidInput>Enter a positive loan amount, a non-negative annual rate, and a whole number of months.</InvalidInput>}
     </div>
   );
 };
 
-// VAT/Tax Calculator
-const VatCalc = () => {
+const VatCalculator = () => {
   const [amount, setAmount] = useState("1000");
   const [rate, setRate] = useState("15");
-  const a = parseFloat(amount) || 0;
-  const r = parseFloat(rate) || 0;
-  const tax = a * r / 100;
+  const result = calculateTax(amount, rate);
+
   return (
     <div className="space-y-4">
-      <Input label="Amount" value={amount} onChange={setAmount} />
-      <Input label="Tax Rate (%)" value={rate} onChange={setRate} step="0.1" />
-      <Result items={[
-        { label: "Tax Amount", value: `৳${tax.toFixed(2)}` },
-        { label: "Total with Tax", value: `৳${(a + tax).toFixed(2)}` },
-        { label: "Tax Rate", value: `${r}%` },
-      ]} />
+      <CalculatorInput label="Amount before tax (৳)" value={amount} onChange={setAmount} min="0" step="any" />
+      <CalculatorInput label="Tax Rate (%)" value={rate} onChange={setRate} min="0" step="0.01" />
+      {result ? (
+        <CalculatorResults items={[
+          { label: "Tax Amount", value: `৳${result.tax.toFixed(2)}` },
+          { label: "Total with Tax", value: `৳${result.total.toFixed(2)}` },
+          { label: "Tax Rate", value: `${result.rate}%` },
+        ]} />
+      ) : <InvalidInput>Enter an amount and a non-negative tax rate.</InvalidInput>}
     </div>
   );
 };
 
-// BMI Calculator
-const BmiCalc = () => {
+const BmiCalculator = () => {
   const [height, setHeight] = useState("170");
   const [weight, setWeight] = useState("70");
-  const h = parseFloat(height) / 100 || 1;
-  const w = parseFloat(weight) || 0;
-  const bmi = w / (h * h);
-  const category = bmi < 18.5 ? "Underweight" : bmi < 25 ? "Normal" : bmi < 30 ? "Overweight" : "Obese";
+  const result = calculateBmi(height, weight);
+
   return (
     <div className="space-y-4">
-      <Input label="Height (cm)" value={height} onChange={setHeight} />
-      <Input label="Weight (kg)" value={weight} onChange={setWeight} />
-      <Result items={[
-        { label: "BMI", value: bmi.toFixed(1) },
-        { label: "Category", value: category },
-      ]} />
+      <CalculatorInput label="Height (cm)" value={height} onChange={setHeight} min="0.01" step="any" />
+      <CalculatorInput label="Weight (kg)" value={weight} onChange={setWeight} min="0.01" step="any" />
+      {result ? (
+        <>
+          <CalculatorResults items={[
+            { label: "BMI", value: result.bmi.toFixed(1) },
+            { label: "Adult BMI Category", value: result.category },
+          ]} />
+          <p className="text-xs text-muted-foreground">BMI is a screening measure, not a medical diagnosis.</p>
+        </>
+      ) : <InvalidInput>Enter a height and weight greater than zero.</InvalidInput>}
     </div>
   );
 };
 
-// Percentage Calculator
-const PercentCalc = () => {
+const PercentageCalculator = () => {
   const [value, setValue] = useState("25");
   const [total, setTotal] = useState("200");
-  const v = parseFloat(value) || 0;
-  const t = parseFloat(total) || 1;
+  const result = calculatePercentage(value, total);
+
   return (
     <div className="space-y-4">
-      <Input label="Value" value={value} onChange={setValue} />
-      <Input label="Total" value={total} onChange={setTotal} />
-      <Result items={[
-        { label: "Percentage", value: `${(v / t * 100).toFixed(2)}%` },
-        { label: "Fraction", value: `${v}/${t}` },
-      ]} />
+      <CalculatorInput label="Value" value={value} onChange={setValue} step="any" />
+      <CalculatorInput label="Total (cannot be zero)" value={total} onChange={setTotal} step="any" />
+      {result ? (
+        <CalculatorResults items={[
+          { label: "Percentage", value: `${result.percentage.toFixed(2)}%` },
+          { label: "Fraction", value: result.fraction },
+        ]} />
+      ) : <InvalidInput>Enter valid numbers and a non-zero total.</InvalidInput>}
     </div>
   );
 };
 
-// Discount Calculator
-const DiscountCalc = () => {
+const DiscountCalculator = () => {
   const [price, setPrice] = useState("1000");
   const [discount, setDiscount] = useState("20");
-  const p = parseFloat(price) || 0;
-  const d = parseFloat(discount) || 0;
-  const savings = p * d / 100;
+  const result = calculateDiscount(price, discount);
+
   return (
     <div className="space-y-4">
-      <Input label="Original Price" value={price} onChange={setPrice} />
-      <Input label="Discount (%)" value={discount} onChange={setDiscount} />
-      <Result items={[
-        { label: "You Save", value: `৳${savings.toFixed(2)}` },
-        { label: "Final Price", value: `৳${(p - savings).toFixed(2)}` },
-        { label: "Discount", value: `${d}%` },
-      ]} />
+      <CalculatorInput label="Original Price (৳)" value={price} onChange={setPrice} min="0" step="any" />
+      <CalculatorInput label="Discount (%)" value={discount} onChange={setDiscount} min="0" max="100" step="0.01" />
+      {result ? (
+        <CalculatorResults items={[
+          { label: "You Save", value: `৳${result.savings.toFixed(2)}` },
+          { label: "Final Price", value: `৳${result.finalPrice.toFixed(2)}` },
+          { label: "Discount", value: `${result.discount}%` },
+        ]} />
+      ) : <InvalidInput>Enter a non-negative price and a discount from 0 to 100%.</InvalidInput>}
     </div>
   );
 };
 
-// Loan Calculator
-const LoanCalc = () => {
+const LoanCalculator = () => {
   const [amount, setAmount] = useState("500000");
   const [rate, setRate] = useState("8");
   const [years, setYears] = useState("5");
-  const a = parseFloat(amount) || 0;
-  const r = (parseFloat(rate) || 0) / 12 / 100;
-  const n = (parseFloat(years) || 1) * 12;
-  const monthly = r > 0 ? a * r * Math.pow(1 + r, n) / (Math.pow(1 + r, n) - 1) : a / n;
+  const months = Number(years) * 12;
+  const result = calculateLoan(amount, rate, months);
+
   return (
     <div className="space-y-4">
-      <Input label="Loan Amount" value={amount} onChange={setAmount} />
-      <Input label="Interest Rate (% per year)" value={rate} onChange={setRate} step="0.1" />
-      <Input label="Loan Term (years)" value={years} onChange={setYears} />
-      <Result items={[
-        { label: "Monthly Payment", value: `৳${monthly.toFixed(0)}` },
-        { label: "Total Payment", value: `৳${(monthly * n).toFixed(0)}` },
-        { label: "Total Interest", value: `৳${(monthly * n - a).toFixed(0)}` },
-      ]} />
+      <CalculatorInput label="Loan Amount (৳)" value={amount} onChange={setAmount} min="0.01" step="any" />
+      <CalculatorInput label="Interest Rate (% per year)" value={rate} onChange={setRate} min="0" step="0.01" />
+      <CalculatorInput label="Loan Term (years)" value={years} onChange={setYears} min="1" step="1" />
+      {result ? (
+        <CalculatorResults items={[
+          { label: "Monthly Payment", value: `৳${result.monthlyPayment.toFixed(2)}` },
+          { label: "Total Payment", value: `৳${result.totalPayment.toFixed(2)}` },
+          { label: "Total Interest", value: `৳${result.totalInterest.toFixed(2)}` },
+        ]} />
+      ) : <InvalidInput>Enter a positive loan amount, a non-negative annual rate, and a whole number of years.</InvalidInput>}
     </div>
   );
 };
 
-// Tip Calculator
-const TipCalc = () => {
+const TipCalculator = () => {
   const [bill, setBill] = useState("500");
-  const [tipPct, setTipPct] = useState("15");
-  const [split, setSplit] = useState("1");
-  const b = parseFloat(bill) || 0;
-  const t = parseFloat(tipPct) || 0;
-  const s = parseFloat(split) || 1;
-  const tip = b * t / 100;
+  const [tipPercent, setTipPercent] = useState("15");
+  const [people, setPeople] = useState("1");
+  const result = calculateTip(bill, tipPercent, people);
+
   return (
     <div className="space-y-4">
-      <Input label="Bill Amount" value={bill} onChange={setBill} />
-      <Input label="Tip (%)" value={tipPct} onChange={setTipPct} />
-      <Input label="Split Between" value={split} onChange={setSplit} min="1" />
-      <Result items={[
-        { label: "Tip Amount", value: `৳${tip.toFixed(2)}` },
-        { label: "Total", value: `৳${(b + tip).toFixed(2)}` },
-        { label: "Per Person", value: `৳${((b + tip) / s).toFixed(2)}` },
-      ]} />
+      <CalculatorInput label="Bill Amount (৳)" value={bill} onChange={setBill} min="0" step="any" />
+      <CalculatorInput label="Tip (%)" value={tipPercent} onChange={setTipPercent} min="0" step="0.01" />
+      <CalculatorInput label="Number of People" value={people} onChange={setPeople} min="1" step="1" />
+      {result ? (
+        <CalculatorResults items={[
+          { label: "Tip Amount", value: `৳${result.tipAmount.toFixed(2)}` },
+          { label: "Total with Tip", value: `৳${result.total.toFixed(2)}` },
+          { label: "Per Person", value: `৳${result.perPerson.toFixed(2)}` },
+        ]} />
+      ) : <InvalidInput>Enter a non-negative bill and tip, and a positive whole number of people.</InvalidInput>}
     </div>
   );
 };
 
-// Unit Converter
-const units: Record<string, Record<string, number>> = {
-  Length: { Meter: 1, Kilometer: 0.001, Centimeter: 100, Millimeter: 1000, Mile: 0.000621371, Yard: 1.09361, Foot: 3.28084, Inch: 39.3701 },
-  Weight: { Kilogram: 1, Gram: 1000, Milligram: 1e6, Pound: 2.20462, Ounce: 35.274, Ton: 0.001 },
-  Temperature: { Celsius: 1, Fahrenheit: 1, Kelvin: 1 },
-};
-
-const UnitConv = () => {
-  const [cat, setCat] = useState("Length");
-  const [from, setFrom] = useState(Object.keys(units.Length)[0]);
-  const [to, setTo] = useState(Object.keys(units.Length)[1]);
+const UnitConverter = () => {
+  const [category, setCategory] = useState<UnitCategory>("Length");
+  const [from, setFrom] = useState("Meter");
+  const [to, setTo] = useState("Kilometer");
   const [value, setValue] = useState("1");
-  const v = parseFloat(value) || 0;
+  const result = convertUnit(value, category, from, to);
+  const options = Object.keys(units[category]);
+  const categories = Object.keys(units) as UnitCategory[];
 
-  let result: number;
-  if (cat === "Temperature") {
-    let celsius: number;
-    if (from === "Celsius") celsius = v;
-    else if (from === "Fahrenheit") celsius = (v - 32) * 5 / 9;
-    else celsius = v - 273.15;
-    if (to === "Celsius") result = celsius;
-    else if (to === "Fahrenheit") result = celsius * 9 / 5 + 32;
-    else result = celsius + 273.15;
-  } else {
-    const baseValue = v / units[cat][from];
-    result = baseValue * units[cat][to];
-  }
-
-  const unitOptions = Object.keys(units[cat]);
+  const updateCategory = (nextCategory: UnitCategory) => {
+    const nextUnits = Object.keys(units[nextCategory]);
+    setCategory(nextCategory);
+    setFrom(nextUnits[0]);
+    setTo(nextUnits[1]);
+  };
 
   return (
     <div className="space-y-4">
       <div>
-        <label className="text-sm font-medium mb-1 block">Category</label>
-        <select value={cat} onChange={e => { setCat(e.target.value); setFrom(Object.keys(units[e.target.value])[0]); setTo(Object.keys(units[e.target.value])[1]); }}
-          className="w-full px-4 py-3 rounded-lg border border-border bg-background">
-          {Object.keys(units).map(c => <option key={c}>{c}</option>)}
+        <label htmlFor="unit-category" className="mb-1 block text-sm font-medium">Category</label>
+        <select
+          id="unit-category"
+          value={category}
+          onChange={event => updateCategory(event.target.value as UnitCategory)}
+          className="w-full rounded-lg border border-border bg-background px-4 py-3"
+        >
+          {categories.map(option => <option key={option}>{option}</option>)}
         </select>
       </div>
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <div>
-          <label className="text-sm font-medium mb-1 block">From</label>
-          <select value={from} onChange={e => setFrom(e.target.value)} className="w-full px-4 py-3 rounded-lg border border-border bg-background">
-            {unitOptions.map(u => <option key={u}>{u}</option>)}
+          <label htmlFor="unit-from" className="mb-1 block text-sm font-medium">From</label>
+          <select id="unit-from" value={from} onChange={event => setFrom(event.target.value)} className="w-full rounded-lg border border-border bg-background px-4 py-3">
+            {options.map(option => <option key={option}>{option}</option>)}
           </select>
         </div>
         <div>
-          <label className="text-sm font-medium mb-1 block">To</label>
-          <select value={to} onChange={e => setTo(e.target.value)} className="w-full px-4 py-3 rounded-lg border border-border bg-background">
-            {unitOptions.map(u => <option key={u}>{u}</option>)}
+          <label htmlFor="unit-to" className="mb-1 block text-sm font-medium">To</label>
+          <select id="unit-to" value={to} onChange={event => setTo(event.target.value)} className="w-full rounded-lg border border-border bg-background px-4 py-3">
+            {options.map(option => <option key={option}>{option}</option>)}
           </select>
         </div>
       </div>
-      <Input label="Value" value={value} onChange={setValue} />
-      <Result items={[
-        { label: `${from}`, value: v },
-        { label: `${to}`, value: parseFloat(result.toFixed(6)) },
-      ]} />
+      <CalculatorInput label="Value" value={value} onChange={setValue} step="any" />
+      {result !== null ? (
+        <CalculatorResults items={[
+          { label: from, value: Number(value).toLocaleString() },
+          { label: to, value: Number(result.toFixed(6)).toLocaleString() },
+        ]} />
+      ) : <InvalidInput>Enter a valid number to convert.</InvalidInput>}
     </div>
   );
 };
 
+const renderCalculator = (toolId: string) => {
+  switch (toolId) {
+    case "basic": return <BasicCalculator />;
+    case "gpa": return <GpaCalculator />;
+    case "age": return <AgeCalculator />;
+    case "emi": return <EmiCalculator />;
+    case "vat-tax": return <VatCalculator />;
+    case "bmi": return <BmiCalculator />;
+    case "percentage": return <PercentageCalculator />;
+    case "discount": return <DiscountCalculator />;
+    case "loan": return <LoanCalculator />;
+    case "tip": return <TipCalculator />;
+    case "unit-converter": return <UnitConverter />;
+    default: return null;
+  }
+};
+
 const Calculators = () => {
   const { toolId } = useParams();
-  const meta = toolMeta[toolId!];
-  if (!meta) return <Navigate to="/tools" replace />;
+  const page = toolId ? calculatorPages[toolId] : undefined;
+  if (!page || !toolId) return <Navigate to="/tools" replace />;
+  const calculatorName = page.title.split(" - ")[0];
 
-  const icon = <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/20"><Calculator className="h-8 w-8 text-primary" /></div>;
-
-  const renderCalc = () => {
-    switch (toolId) {
-      case "gpa": return <GpaCalc />;
-      case "age": return <AgeCalc />;
-      case "emi": return <EmiCalc />;
-      case "vat-tax": return <VatCalc />;
-      case "bmi": return <BmiCalc />;
-      case "percentage": return <PercentCalc />;
-      case "discount": return <DiscountCalc />;
-      case "loan": return <LoanCalc />;
-      case "tip": return <TipCalc />;
-      case "unit-converter": return <UnitConv />;
-      default: return null;
-    }
-  };
+  const icon = (
+    <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/20">
+      <Calculator className="h-8 w-8 text-primary" aria-hidden="true" />
+    </div>
+  );
 
   return (
-    <ToolLayout title={meta.title} description={meta.desc} icon={icon} toolCategory="Calculator">
-      <div className="tool-card">{renderCalc()}</div>
-    </ToolLayout>
+    <>
+      <ToolSeo
+        title={page.title}
+        description={page.description}
+        canonicalPath={`/tools/calculator/${toolId}`}
+        keywords={page.keywords}
+        faqs={page.faqs}
+        features={page.features}
+      />
+      <ToolLayout title={calculatorName} description={page.description} icon={icon} toolCategory="Calculator">
+        <div className="space-y-10">
+          <section aria-label={`${calculatorName} form`} className="tool-card">
+            {renderCalculator(toolId)}
+          </section>
+          <section aria-labelledby="calculator-guide" className="space-y-4 border-t border-border pt-8">
+            <h2 id="calculator-guide" className="text-2xl font-semibold">About the {calculatorName}</h2>
+            <p className="leading-7 text-muted-foreground">{page.description}</p>
+          </section>
+          <section aria-labelledby="calculator-faq" className="border-t border-border pt-8">
+            <h2 id="calculator-faq" className="mb-2 text-2xl font-semibold">Frequently asked questions</h2>
+            {page.faqs.map(({ question, answer }) => (
+              <details key={question} className="border-b border-border py-4">
+                <summary className="cursor-pointer font-medium">{question}</summary>
+                <p className="pt-3 text-sm leading-6 text-muted-foreground">{answer}</p>
+              </details>
+            ))}
+          </section>
+        </div>
+      </ToolLayout>
+    </>
   );
 };
 

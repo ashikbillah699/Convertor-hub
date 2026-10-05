@@ -24,7 +24,7 @@ const getFfmpeg = async (onStatus?: (status: Mp3ConversionStatus) => void) => {
     if (!engineLoad) {
       let timeoutId: number | undefined;
       engineLoad = Promise.race([
-        ffmpegInstance.load({ classWorkerURL, coreURL, wasmURL }),
+        ffmpegInstance.load({ classWorkerURL, coreURL, wasmURL }).then(() => undefined),
         new Promise<never>((_, reject) => {
           timeoutId = window.setTimeout(
             () => reject(new Error("FFmpeg worker did not start. Restart the dev server and try again.")),
@@ -46,7 +46,16 @@ const getFfmpeg = async (onStatus?: (status: Mp3ConversionStatus) => void) => {
   return ffmpegInstance;
 };
 
-export const convertVideoToMp3 = async (
+const cleanupFfmpegFiles = async (ffmpeg: FFmpeg, fileNames: string[]) => {
+  const results = await Promise.allSettled(fileNames.map(fileName => ffmpeg.deleteFile(fileName)));
+  results.forEach((result, index) => {
+    if (result.status === "rejected") {
+      console.warn(`Could not remove temporary FFmpeg file "${fileNames[index]}".`, result.reason);
+    }
+  });
+};
+
+export const convertMediaToMp3 = async (
   file: File,
   onStatus?: (status: Mp3ConversionStatus) => void,
 ): Promise<Blob> => {
@@ -86,19 +95,60 @@ export const convertVideoToMp3 = async (
       throw new Error(ffmpegError || "Could not decode this video or extract its audio track.");
     }
 
-    const data = await ffmpeg.readFile(outputName);
-    const bytes =
-      data instanceof Uint8Array
-        ? data
-        : typeof data === "string"
-          ? new TextEncoder().encode(data)
-          : new Uint8Array(data as ArrayBuffer);
-    return new Blob([bytes], { type: "audio/mpeg" });
-  } catch (error) {
-    throw error;
+    const data = await ffmpeg.readFile(outputName, "binary");
+    if (!(data instanceof Uint8Array)) throw new Error("FFmpeg returned audio data in an unexpected text format.");
+    return new Blob([Uint8Array.from(data).buffer], { type: "audio/mpeg" });
   } finally {
     ffmpeg.off("progress", onProgress);
     ffmpeg.off("log", onLog);
+  }
+};
+
+export const compressAudioWithFfmpeg = async (
+  file: File,
+  bitrateKbps: number,
+  onStatus?: (status: Mp3ConversionStatus) => void,
+): Promise<Blob> => {
+  const ffmpeg = await getFfmpeg(onStatus);
+  const extension = file.name.match(/\.[a-z0-9]+$/i)?.[0] || ".audio";
+  const inputName = `audio-input${extension}`;
+  const outputName = "audio-compressed.webm";
+  let ffmpegError = "";
+  const onProgress = ({ progress }: { progress: number }) => {
+    onStatus?.({ phase: "converting", progress: Math.max(0, Math.min(1, progress)) });
+  };
+  const onLog = ({ message }: { message: string }) => {
+    if (/error|invalid|unsupported|failed/i.test(message)) ffmpegError = message.trim();
+  };
+
+  ffmpeg.on("progress", onProgress);
+  ffmpeg.on("log", onLog);
+  try {
+    onStatus?.({ phase: "preparing-file" });
+    await ffmpeg.writeFile(inputName, await fetchFile(file));
+    const exitCode = await ffmpeg.exec([
+      "-v", "error",
+      "-i", inputName,
+      "-vn",
+      "-c:a", "libopus",
+      "-b:a", `${bitrateKbps}k`,
+      "-compression_level", "3",
+      "-application", "audio",
+      "-f", "webm",
+      outputName,
+    ]);
+    if (exitCode !== 0) throw new Error(ffmpegError || "Could not compress this audio file.");
+
+    const data = await ffmpeg.readFile(outputName, "binary");
+    if (!(data instanceof Uint8Array)) throw new Error("FFmpeg returned audio data in an unexpected text format.");
+    const bytes = Uint8Array.from(data);
+    if (!bytes.length) throw new Error("The compressed audio file is empty.");
+    onStatus?.({ phase: "converting", progress: 1 });
+    return new Blob([bytes], { type: "audio/webm;codecs=opus" });
+  } finally {
+    ffmpeg.off("progress", onProgress);
+    ffmpeg.off("log", onLog);
+    await cleanupFfmpegFiles(ffmpeg, [inputName, outputName]);
   }
 };
 
@@ -143,15 +193,15 @@ export const convertVideoToGif = async (
       throw new Error(ffmpegError || "Could not decode this video to make a GIF.");
     }
 
-    const data = await ffmpeg.readFile(outputName);
-    const bytes = data instanceof Uint8Array ? data : new Uint8Array(data as ArrayBuffer);
+    const data = await ffmpeg.readFile(outputName, "binary");
+    if (!(data instanceof Uint8Array)) throw new Error("FFmpeg returned GIF data in an unexpected text format.");
+    const bytes = Uint8Array.from(data);
     if (!bytes.length) throw new Error("No GIF frames were created. Check the selected start time.");
     onStatus?.({ phase: "converting", progress: 1 });
     return new Blob([bytes], { type: "image/gif" });
   } finally {
     ffmpeg.off("progress", onProgress);
     ffmpeg.off("log", onLog);
-    try { await ffmpeg.deleteFile(inputName); } catch {}
-    try { await ffmpeg.deleteFile(outputName); } catch {}
+    await cleanupFfmpegFiles(ffmpeg, [inputName, outputName]);
   }
 };

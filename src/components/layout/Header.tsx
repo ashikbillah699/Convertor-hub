@@ -1,18 +1,8 @@
 import { useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Menu, X, ChevronDown, Zap, User, LogOut, LayoutDashboard, Settings } from "lucide-react";
+import { Link, useLocation } from "react-router-dom";
+import { Menu, X, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useAuth } from "@/contexts/AuthContext";
-import NotificationBell from "@/components/layout/NotificationBell";
 import logoMark from "@/assets/opticthirst-mark.png";
-
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 
 const navItems = [
   {
@@ -31,7 +21,6 @@ const navItems = [
   },
   { label: "Blog", href: "/blog" },
   { label: "Products", href: "/products" },
-  { label: "Dashboard", href: "/dashboard" },
   { label: "About", href: "/about" },
   { label: "Contact", href: "/contact" },
 ];
@@ -40,18 +29,6 @@ const Header = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const location = useLocation();
-  const navigate = useNavigate();
-  const { user, signOut } = useAuth();
-
-  const handleLogout = () => {
-    signOut();
-    navigate("/");
-  };
-
-  const getInitials = () => {
-    const name = user?.display_name || user?.email || "U";
-    return name.charAt(0).toUpperCase();
-  };
 
   return (
     <header className="sticky top-0 z-[100] w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -106,47 +83,9 @@ const Header = () => {
         </nav>
 
         <div className="hidden md:flex items-center gap-3">
-          {user ? (
-            <>
-            <NotificationBell />
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button className="flex h-9 w-9 items-center justify-center rounded-full gradient-primary text-primary-foreground font-semibold text-sm hover:opacity-90 transition-opacity">
-                  {getInitials()}
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <div className="px-2 py-1.5">
-                  <p className="text-sm font-medium truncate">{user.display_name || "User"}</p>
-                  <p className="text-xs text-muted-foreground truncate">{user.email}</p>
-                </div>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => navigate("/dashboard")}>
-                  <LayoutDashboard className="h-4 w-4 mr-2" />
-                  Dashboard
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate("/dashboard/profile")}>
-                  <Settings className="h-4 w-4 mr-2" />
-                  Profile
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleLogout} className="text-destructive">
-                  <LogOut className="h-4 w-4 mr-2" />
-                  Logout
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            </>
-          ) : (
-            <>
-              <Button variant="outline" size="sm" className="gradient-hover-border-btn" asChild>
-                <Link to="/login">Sign In</Link>
-              </Button>
-              <Button variant="gradient" size="sm" asChild>
-                <Link to="/signup">Sign Up</Link>
-              </Button>
-            </>
-          )}
+          <Button variant="outline" size="sm" className="gradient-hover-border-btn" asChild>
+            <Link to="/admin">Admin sign in</Link>
+          </Button>
         </div>
 
         <button className="md:hidden p-2" onClick={() => setMobileOpen(!mobileOpen)}>
@@ -178,25 +117,9 @@ const Header = () => {
               </div>
             ))}
             <div className="pt-4 space-y-2">
-              {user ? (
-                <>
-                  <Link to="/dashboard" onClick={() => setMobileOpen(false)}>
-                    <Button variant="outline" className="w-full">Dashboard</Button>
-                  </Link>
-                  <Button variant="destructive" className="w-full" onClick={() => { handleLogout(); setMobileOpen(false); }}>
-                    Logout
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <Link to="/login" onClick={() => setMobileOpen(false)}>
-                    <Button variant="outline" className="gradient-hover-border-btn w-full">Sign In</Button>
-                  </Link>
-                  <Link to="/signup" onClick={() => setMobileOpen(false)}>
-                    <Button variant="gradient" className="w-full">Sign Up</Button>
-                  </Link>
-                </>
-              )}
+              <Link to="/admin" onClick={() => setMobileOpen(false)}>
+                <Button variant="outline" className="gradient-hover-border-btn w-full">Admin sign in</Button>
+              </Link>
             </div>
           </nav>
         </div>

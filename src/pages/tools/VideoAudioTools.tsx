@@ -5,7 +5,7 @@ import FileUpload from "@/components/tools/FileUpload";
 import { Button } from "@/components/ui/button";
 import { Video, Music, Download, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { convertVideoToMp3, convertVideoToGif, getMp3OutputName, type Mp3ConversionStatus } from "@/lib/videoAudio";
+import { convertMediaToMp3, convertVideoToGif, compressAudioWithFfmpeg, getMp3OutputName, type Mp3ConversionStatus } from "@/lib/videoAudio";
 import { getVideoCompressionSettings } from "@/lib/mediaCompression";
 
 interface ToolConfig {
@@ -69,7 +69,7 @@ const tools: Record<string, ToolConfig> = {
   "audio-compress": { title: "Audio Compressor", desc: "Reduce audio file size", accept: ".mp3,.wav,.m4a", category: "audio" },
   "video-to-audio": { title: "Video to Audio", desc: "Extract audio from video files and download as MP3", accept: ".mp4,.webm,.avi,.mov", category: "video" },
   "youtube-thumbnail": { title: "YouTube Thumbnail Downloader", desc: "Download YouTube video thumbnails", accept: "", category: "video" },
-  "youtube-mp3": { title: "YouTube MP3 Downloader", desc: "Download audio from YouTube videos", accept: "", category: "video" },
+  "youtube-mp3": { title: "YouTube MP3 Downloader", desc: "Extract MP3 audio from videos you are allowed to use", accept: ".mp4,.webm,.avi,.mov", category: "video" },
   "m4a-to-mp3": { title: "M4A to MP3", desc: "Convert M4A audio to MP3 format", accept: ".m4a", category: "audio" },
 };
 
@@ -125,42 +125,22 @@ const VideoAudioTools = () => {
     }
   };
 
-  const handleMp4ToMp3 = async () => {
+  const handleConvertToMp3 = async () => {
     if (!file) return;
     setLoading(true);
     setMp3Status(null);
+    const sourceFormat = toolId === "youtube-mp3" ? "Video" : toolId === "mp4-to-mp3" ? "MP4" : toolId === "wav-to-mp3" ? "WAV" : "M4A";
     try {
-      const mp3Blob = await convertVideoToMp3(file, setMp3Status);
+      const mp3Blob = await convertMediaToMp3(file, setMp3Status);
       const url = URL.createObjectURL(mp3Blob);
       const anchor = document.createElement("a");
       anchor.href = url;
       anchor.download = getMp3OutputName(file.name);
       anchor.click();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-      toast.success("MP4 converted to MP3 and downloaded.");
+      toast.success(`${sourceFormat} ${toolId === "youtube-mp3" ? "audio extracted" : "converted"} to MP3 and downloaded (${(mp3Blob.size / 1024 / 1024).toFixed(2)} MB).`);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "MP4 to MP3 conversion failed.");
-    } finally {
-      setLoading(false);
-      setMp3Status(null);
-    }
-  };
-
-  const handleWavToMp3 = async () => {
-    if (!file) return;
-    setLoading(true);
-    setMp3Status(null);
-    try {
-      const mp3Blob = await convertVideoToMp3(file, setMp3Status);
-      const url = URL.createObjectURL(mp3Blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      anchor.download = getMp3OutputName(file.name);
-      anchor.click();
-      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-      toast.success(`WAV converted to MP3 (${(mp3Blob.size / 1024 / 1024).toFixed(2)} MB).`);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "WAV to MP3 conversion failed.");
+      toast.error(error instanceof Error ? error.message : `${sourceFormat} to MP3 conversion failed.`);
     } finally {
       setLoading(false);
       setMp3Status(null);
@@ -198,7 +178,7 @@ const VideoAudioTools = () => {
     setLoading(true);
     setMp3Status(null);
     try {
-      const mp3Blob = await convertVideoToMp3(file, setMp3Status);
+      const mp3Blob = await convertMediaToMp3(file, setMp3Status);
       const url = URL.createObjectURL(mp3Blob);
       const anchor = document.createElement("a");
       anchor.href = url;
@@ -297,20 +277,26 @@ const VideoAudioTools = () => {
         const decoded = await audioContext.decodeAudioData(await file.arrayBuffer());
         const audioDestination = audioContext.createMediaStreamDestination();
         const source = audioContext.createBufferSource();
+        let sourceStarted = false;
         source.buffer = decoded;
         source.connect(audioDestination);
         source.onended = () => {
+          sourceStarted = false;
           setCompressionProgress(100);
           onMediaEnded?.();
         };
         stream = audioDestination.stream;
         cleanup = () => {
-          try { source.stop(); } catch {}
+          if (sourceStarted) {
+            source.stop();
+            sourceStarted = false;
+          }
           stream.getTracks().forEach(track => track.stop());
         };
         start = async () => {
           await audioContext!.resume();
           source.start();
+          sourceStarted = true;
         };
       }
 
@@ -367,6 +353,39 @@ const VideoAudioTools = () => {
     }
   };
 
+  const handleAudioCompression = async () => {
+    if (!file) return;
+    setLoading(true);
+    setCompressionProgress(0);
+    setMp3Status(null);
+    try {
+      const output = await compressAudioWithFfmpeg(file, audioBitrate, status => {
+        setMp3Status(status);
+        if (status.phase === "converting" && status.progress !== undefined) {
+          setCompressionProgress(Math.round(status.progress * 100));
+        }
+      });
+      const url = URL.createObjectURL(output);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `${file.name.replace(/\.[^.]+$/, "")}-compressed.webm`;
+      anchor.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      const change = Math.round((1 - output.size / file.size) * 100);
+      if (change > 0) {
+        toast.success(`Reduced file size by ${change}% (${(output.size / 1024 / 1024).toFixed(2)} MB).`);
+      } else {
+        toast.warning("The encoded file is larger than the original. Lower the target bitrate and try again.");
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Audio compression failed.");
+    } finally {
+      setLoading(false);
+      setCompressionProgress(0);
+      setMp3Status(null);
+    }
+  };
+
   return (
     <ToolLayout
       title={tool.title}
@@ -390,11 +409,12 @@ const VideoAudioTools = () => {
           )}
           <p className="text-sm text-muted-foreground">Only publicly available thumbnails can be retrieved. Availability and image size depend on the video.</p>
         </div>
-      ) : tool.title === "YouTube MP3 Downloader" ? (
-        <div className="tool-card text-center py-12">
-          <div className="text-4xl mb-4">🚀</div>
-          <h3 className="text-xl font-semibold mb-2">Coming Soon</h3>
-          <p className="text-muted-foreground">Video & audio processing requires server-side FFmpeg. This feature will be available once the backend is set up.</p>
+      ) : toolId === "youtube-mp3" ? (
+        <div className="space-y-6">
+          {!file ? <FileUpload accept={tool.accept} onFile={setFile} /> : <div className="tool-card flex items-center justify-between"><p className="text-sm font-medium">{file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)</p><Button variant="outline" size="sm" onClick={() => setFile(null)}>Change</Button></div>}
+          <Button onClick={handleConvertToMp3} disabled={!file || loading} variant="gradient">{loading ? <><Loader2 className="h-4 w-4 animate-spin" /> {mp3Status?.phase === "loading-engine" ? "Loading engine..." : mp3Status?.phase === "preparing-file" ? "Preparing video..." : `Extracting MP3${mp3Status?.progress === undefined ? "..." : ` ${Math.round(mp3Status.progress * 100)}%`}`}</> : "Extract MP3"}</Button>
+          {loading && <progress value={(mp3Status?.progress ?? 0) * 100} max={100} className="h-2 w-full" aria-label="Audio extraction progress" />}
+          <p className="text-sm text-muted-foreground">Upload a video you own or have permission to use. Audio is extracted locally with FFmpeg, without waiting for the video to play in real time. Direct YouTube URL downloads are not supported.</p>
         </div>
       ) : toolId === "mp4-to-gif" ? (
         <div className="space-y-6">
@@ -421,12 +441,13 @@ const VideoAudioTools = () => {
           {loading && <progress value={(gifStatus?.progress ?? 0) * 100} max={100} className="h-2 w-full" aria-label="GIF conversion progress" />}
           <p className="text-sm text-muted-foreground">Creates a palette-optimized animated GIF locally in your browser. Choose a short clip; longer clips, higher width, and higher frame rate produce larger files. Videos over 100 MB are not supported.</p>
         </div>
-      ) : toolId === "mp4-to-mp3" ? (
+      ) : toolId === "mp4-to-mp3" || toolId === "m4a-to-mp3" || toolId === "wav-to-mp3" ? (
         <div className="space-y-6">
           {!file ? <FileUpload accept={tool.accept} onFile={setFile} /> : <div className="tool-card flex items-center justify-between"><p className="text-sm font-medium">{file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)</p><Button variant="outline" size="sm" onClick={() => setFile(null)}>Change</Button></div>}
-          <Button onClick={handleMp4ToMp3} disabled={!file || loading} variant="gradient">{loading ? <><Loader2 className="h-4 w-4 animate-spin" /> {mp3Status?.phase === "loading-engine" ? "Loading engine..." : mp3Status?.phase === "preparing-file" ? "Preparing file..." : "Converting..."}</> : "Convert to MP3"}</Button>
-          {loading && <p className="text-sm text-muted-foreground" aria-live="polite">{mp3Status?.phase === "loading-engine" ? "Downloading the conversion engine..." : mp3Status?.phase === "preparing-file" ? "Preparing your video for conversion..." : `Converting audio${mp3Status?.progress === undefined ? "..." : `: ${Math.round(mp3Status.progress * 100)}%`}`}</p>}
-          <p className="text-sm text-muted-foreground">Uses browser-side FFmpeg to extract the audio track and save it as an MP3 file. Larger videos may take longer to transcode in the browser.</p>
+          <Button onClick={handleConvertToMp3} disabled={!file || loading} variant="gradient">{loading ? <><Loader2 className="h-4 w-4 animate-spin" /> {mp3Status?.phase === "loading-engine" ? "Loading engine..." : mp3Status?.phase === "preparing-file" ? "Preparing file..." : `Converting${mp3Status?.progress === undefined ? "..." : ` ${Math.round(mp3Status.progress * 100)}%`}`}</> : "Convert to MP3"}</Button>
+          {loading && <progress value={(mp3Status?.progress ?? 0) * 100} max={100} className="h-2 w-full" aria-label="MP3 conversion progress" />}
+          {loading && <p className="text-sm text-muted-foreground" aria-live="polite">{mp3Status?.phase === "loading-engine" ? "Downloading the conversion engine..." : mp3Status?.phase === "preparing-file" ? "Preparing file for conversion..." : `Converting audio${mp3Status?.progress === undefined ? "..." : `: ${Math.round(mp3Status.progress * 100)}%`}`}</p>}
+          <p className="text-sm text-muted-foreground">{toolId === "mp4-to-mp3" ? "Extracts the audio track from MP4 and encodes it as MP3 with FFmpeg in your browser." : "Converts your audio to MP3 with FFmpeg in your browser. Processing does not depend on real-time playback."}</p>
         </div>
       ) : toolId === "video-to-audio" ? (
         <div className="space-y-6">
@@ -434,13 +455,6 @@ const VideoAudioTools = () => {
           <Button onClick={handleVideoToAudio} disabled={!file || loading} variant="gradient">{loading ? <><Loader2 className="h-4 w-4 animate-spin" /> {mp3Status?.phase === "loading-engine" ? "Loading engine..." : mp3Status?.phase === "preparing-file" ? "Preparing video..." : `Extracting audio${mp3Status?.progress === undefined ? "..." : ` ${Math.round(mp3Status.progress * 100)}%`}`}</> : "Extract audio (MP3)"}</Button>
           {loading && <progress value={(mp3Status?.progress ?? 0) * 100} max={100} className="h-2 w-full" aria-label="Audio extraction progress" />}
           <p className="text-sm text-muted-foreground">Extracts and converts only the audio stream locally with FFmpeg; the video does not have to play through in real time. Output downloads as MP3.</p>
-        </div>
-      ) : toolId === "wav-to-mp3" ? (
-        <div className="space-y-6">
-          {!file ? <FileUpload accept={tool.accept} onFile={setFile} /> : <div className="tool-card flex items-center justify-between"><p className="text-sm font-medium">{file.name} ({(file.size / 1024 / 1024).toFixed(2)} MB)</p><Button variant="outline" size="sm" onClick={() => setFile(null)}>Change</Button></div>}
-          <Button onClick={handleWavToMp3} disabled={!file || loading} variant="gradient">{loading ? <><Loader2 className="h-4 w-4 animate-spin" /> {mp3Status?.phase === "loading-engine" ? "Loading engine..." : mp3Status?.phase === "preparing-file" ? "Preparing WAV..." : `Converting${mp3Status?.progress === undefined ? "..." : ` ${Math.round(mp3Status.progress * 100)}%`}`}</> : "Convert to MP3"}</Button>
-          {loading && <progress value={(mp3Status?.progress ?? 0) * 100} max={100} className="h-2 w-full" aria-label="WAV conversion progress" />}
-          <p className="text-sm text-muted-foreground">Converts your WAV audio to a high-quality MP3 locally in your browser. The first conversion may take a moment while the audio engine starts.</p>
         </div>
       ) : toolId === "mp3-to-wav" ? (
         <div className="space-y-6">
@@ -454,9 +468,9 @@ const VideoAudioTools = () => {
           <div className="tool-card">
             <label htmlFor="media-bitrate" className="font-semibold">Target bitrate: {toolId === "video-compress" ? videoBitrate : audioBitrate} kbps</label>
             <input id="media-bitrate" type="range" min={toolId === "video-compress" ? 150 : 32} max={toolId === "video-compress" ? 2000 : 192} step={toolId === "video-compress" ? 50 : 16} value={toolId === "video-compress" ? videoBitrate : audioBitrate} onChange={e => toolId === "video-compress" ? setVideoBitrate(Number(e.target.value)) : setAudioBitrate(Number(e.target.value))} className="w-full mt-3" />
-            <p className="text-sm text-muted-foreground mt-2">{toolId === "video-compress" ? "Strong compression: output is capped at 720×405, 15 fps, with 32 kbps audio. Output is WebM. Video plays through in real time while encoding." : "Output is WebM using browser-supported Opus. Processing happens locally in real time."}</p>
+            <p className="text-sm text-muted-foreground mt-2">{toolId === "video-compress" ? "Strong compression: output is capped at 720×405, 15 fps, with 32 kbps audio. Output is WebM. Video plays through in real time while encoding." : "Encodes to Opus/WebM with FFmpeg locally in your browser; audio does not need to play through in real time."}</p>
           </div>
-          <Button onClick={handleCompression} disabled={!file || loading} variant="gradient">{loading ? <><Loader2 className="h-4 w-4 animate-spin" /> Compressing {compressionProgress}%...</> : "Compress and download"}</Button>
+          <Button onClick={toolId === "audio-compress" ? handleAudioCompression : handleCompression} disabled={!file || loading} variant="gradient">{loading ? <><Loader2 className="h-4 w-4 animate-spin" /> {toolId === "audio-compress" ? mp3Status?.phase === "loading-engine" ? "Loading engine..." : mp3Status?.phase === "preparing-file" ? "Preparing audio..." : `Compressing ${compressionProgress}%...` : `Compressing ${compressionProgress}%...`}</> : "Compress and download"}</Button>
           {loading && <progress value={compressionProgress} max={100} className="h-2 w-full" aria-label="Compression progress" />}
         </div>
       ) : (

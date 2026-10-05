@@ -1,65 +1,10 @@
 import { useState, useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { Search, Calendar, Clock, ArrowRight } from "lucide-react";
-
-const blogPosts = [
-  {
-    id: "1",
-    title: "How to Compress PDF Files Without Losing Quality",
-    excerpt: "Learn the best techniques to reduce PDF file size while maintaining document quality. Perfect for email attachments and uploads.",
-    category: "PDF Tips",
-    date: "Jan 28, 2025",
-    readTime: "5 min read",
-    image: "https://images.unsplash.com/photo-1586281380349-632531db7ed4?w=600&h=400&fit=crop",
-  },
-  {
-    id: "2",
-    title: "JPG vs PNG: Which Image Format Should You Use?",
-    excerpt: "Understand the differences between JPG and PNG formats to choose the right one for your needs.",
-    category: "Image Tips",
-    date: "Jan 25, 2025",
-    readTime: "4 min read",
-    image: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=600&h=400&fit=crop",
-  },
-  {
-    id: "3",
-    title: "Best Free Online Tools for Content Creators in 2025",
-    excerpt: "Discover the top free online tools every content creator needs. From image editing to video conversion.",
-    category: "Tools Guide",
-    date: "Jan 22, 2025",
-    readTime: "7 min read",
-    image: "https://images.unsplash.com/photo-1611532736597-de2d4265fba3?w=600&h=400&fit=crop",
-  },
-  {
-    id: "4",
-    title: "How to Convert Video to GIF: Complete Guide",
-    excerpt: "Step-by-step tutorial on creating GIFs from videos. Perfect for social media and messaging.",
-    category: "Video Tips",
-    date: "Jan 20, 2025",
-    readTime: "6 min read",
-    image: "https://images.unsplash.com/photo-1574375927938-d5a98e8ffe85?w=600&h=400&fit=crop",
-  },
-  {
-    id: "5",
-    title: "Word Count SEO: How Many Words Should Your Blog Post Have?",
-    excerpt: "Learn the ideal word count for different types of content and how it affects your SEO rankings.",
-    category: "SEO Tips",
-    date: "Jan 18, 2025",
-    readTime: "5 min read",
-    image: "https://images.unsplash.com/photo-1486312338219-ce68d2c6f44d?w=600&h=400&fit=crop",
-  },
-  {
-    id: "6",
-    title: "Understanding Audio Formats: MP3 vs WAV vs FLAC",
-    excerpt: "A comprehensive comparison of popular audio formats and when to use each one.",
-    category: "Audio Tips",
-    date: "Jan 15, 2025",
-    readTime: "6 min read",
-    image: "https://images.unsplash.com/photo-1493225457124-a3eb161ffa5f?w=600&h=400&fit=crop",
-  },
-];
+import { getPublicBlogs } from "@/lib/contentApi";
 
 const categories = ["All", "PDF Tips", "Image Tips", "Video Tips", "Audio Tips", "Tools Guide", "SEO Tips"];
 
@@ -78,6 +23,10 @@ const BlogPage = () => {
   const [searchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("All");
+  const { data: blogPosts = [], isLoading, error, refetch } = useQuery({
+    queryKey: ["public-blogs"],
+    queryFn: getPublicBlogs,
+  });
 
   useEffect(() => {
     const tc = searchParams.get("toolCategory");
@@ -86,11 +35,16 @@ const BlogPage = () => {
     }
   }, [searchParams]);
 
+  const requestedToolCategory = searchParams.get("toolCategory");
+  const mappedCategory = requestedToolCategory ? toolCategoryToBlog[requestedToolCategory] : undefined;
   const filteredPosts = blogPosts.filter((post) => {
     const matchesSearch = post.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       post.excerpt.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesToolCategory = !requestedToolCategory ||
+      selectedCategory !== mappedCategory ||
+      post.relatedToolCategories.includes(requestedToolCategory);
     const matchesCategory = selectedCategory === "All" || post.category === selectedCategory;
-    return matchesSearch && matchesCategory;
+    return matchesSearch && matchesCategory && matchesToolCategory;
   });
 
   return (
@@ -148,6 +102,13 @@ const BlogPage = () => {
           </div>
 
           {/* Blog Grid */}
+          {isLoading && <p className="py-12 text-center text-muted-foreground">Loading articles…</p>}
+          {error && (
+            <div role="alert" className="py-12 text-center">
+              <p className="mb-3 text-destructive">{error.message}</p>
+              <button className="text-primary underline" onClick={() => void refetch()}>Try again</button>
+            </div>
+          )}
           <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
             {filteredPosts.map((post, index) => (
               <Link

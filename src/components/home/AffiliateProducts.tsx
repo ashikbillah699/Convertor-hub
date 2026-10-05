@@ -1,11 +1,16 @@
 import { Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, ExternalLink, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { products } from "@/data/products";
-
-const featuredProducts = products.slice(0, 4);
+import { getPublicProducts } from "@/lib/contentApi";
 
 const AffiliateProducts = () => {
+  const { data: products = [], isLoading, error } = useQuery({
+    queryKey: ["public-products"],
+    queryFn: getPublicProducts,
+  });
+  const featuredProducts = products.slice(0, 4);
+
   return (
     <section className="py-20 md:py-28 bg-secondary/30">
       <div className="container">
@@ -28,6 +33,8 @@ const AffiliateProducts = () => {
         </div>
 
         {/* Products Grid */}
+        {isLoading && <p className="text-center text-muted-foreground">Loading products…</p>}
+        {error && <p role="alert" className="text-center text-destructive">{error.message}</p>}
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
           {featuredProducts.map((product, index) => (
             <Link

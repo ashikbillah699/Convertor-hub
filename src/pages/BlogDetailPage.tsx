@@ -1,9 +1,10 @@
 import { Link, useParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, Calendar, Clock, User, Tag, ArrowRight } from "lucide-react";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
-import { getBlogPostById, getRelatedPosts } from "@/data/blogPosts";
+import { getPublicBlog, getPublicBlogs } from "@/lib/contentApi";
 import NotFound from "./NotFound";
 
 const renderParagraph = (text: string, idx: number) => {
@@ -41,11 +42,30 @@ const renderParagraph = (text: string, idx: number) => {
 
 const BlogDetailPage = () => {
   const { id } = useParams<{ id: string }>();
-  const post = id ? getBlogPostById(id) : undefined;
+  const { data: post, isLoading, error, refetch } = useQuery({
+    queryKey: ["public-blog", id],
+    queryFn: () => getPublicBlog(id!),
+    enabled: Boolean(id),
+  });
+  const { data: allPosts = [] } = useQuery({
+    queryKey: ["public-blogs"],
+    queryFn: getPublicBlogs,
+  });
 
+  if (isLoading) return <div className="grid min-h-screen place-items-center text-muted-foreground">Loading article…</div>;
+  if (error) {
+    return (
+      <div className="grid min-h-screen place-items-center px-4 text-center">
+        <div role="alert">
+          <p className="mb-3 text-destructive">{error.message}</p>
+          <button className="text-primary underline" onClick={() => void refetch()}>Try again</button>
+        </div>
+      </div>
+    );
+  }
   if (!post) return <NotFound />;
 
-  const related = getRelatedPosts(post.id);
+  const related = allPosts.filter((item) => item.id !== post.id).slice(0, 3);
 
   return (
     <div className="min-h-screen bg-background">
